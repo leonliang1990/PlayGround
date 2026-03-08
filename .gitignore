@@ -1,9 +1,8 @@
-__pycache__/
-*.pyc
-.pytest_cache/
-.streamlit/
-data/*.db
-data/*.csv
+# OS
+.DS_Store
+Thumbs.db
 
-# Personal Instagram export data – never commit
-IG_INFO/
+# IDE
+.idea/
+.vscode/
+*.swp
