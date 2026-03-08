@@ -3,6 +3,8 @@ const IG_API_BASE = "https://i.instagram.com/api/v1";
 const PAGE_SIZE = 200;
 const PAGE_DELAY_MS = 800;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const BIO_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+const BIO_DELAY_MS = 700;
 
 // ---------------------------------------------------------------------------
 // Cookie helpers
@@ -116,6 +118,39 @@ async function setCache(order, users) {
   await chrome.storage.local.set({ [key]: users, [`${key}_ts`]: Date.now() });
 }
 
+async function getBioCacheBatch(ids) {
+  const keys = ids.map((id) => `bio_${id}`);
+  const result = await chrome.storage.local.get(keys);
+  const now = Date.now();
+  const map = {};
+  for (const id of ids) {
+    const item = result[`bio_${id}`];
+    if (!item || !item.ts) continue;
+    if (now - item.ts > BIO_CACHE_TTL_MS) continue;
+    map[id] = item;
+  }
+  return map;
+}
+
+async function setBioCacheOne(id, profile) {
+  await chrome.storage.local.set({
+    [`bio_${id}`]: {
+      ...profile,
+      ts: Date.now(),
+    },
+  });
+}
+
+async function fetchUserBio(cookies, userId) {
+  const data = await igFetch(`/users/${userId}/info/`, cookies);
+  const u = data?.user || {};
+  return {
+    biography: u.biography || "",
+    category: u.category || "",
+    city_name: u.city_name || "",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Message handler (simple request/response)
 // ---------------------------------------------------------------------------
@@ -151,9 +186,89 @@ async function handleCheckLogin(sendResponse) {
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== "following") return;
+  if (port.name !== "following" && port.name !== "bios") return;
 
   port.onMessage.addListener(async (msg) => {
+    if (msg.type === "FETCH_BIOS") {
+      const ids = Array.isArray(msg.ids) ? msg.ids.filter(Boolean) : [];
+      const parsed = Number(msg.limit);
+      const limit = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : ids.length;
+      const targetIds = ids.slice(0, limit);
+
+      try {
+        const cookies = await getIGCookies();
+        if (!cookies.ds_user_id || !cookies.sessionid) {
+          port.postMessage({ type: "ERROR", error: "Not logged in to Instagram." });
+          return;
+        }
+
+        const cached = await getBioCacheBatch(targetIds);
+        const profiles = {};
+        for (const id of Object.keys(cached)) {
+          profiles[id] = {
+            biography: cached[id].biography || "",
+            category: cached[id].category || "",
+            city_name: cached[id].city_name || "",
+          };
+        }
+
+        const pendingIds = targetIds.filter((id) => !cached[id]);
+        let processed = Object.keys(cached).length;
+        let fetched = 0;
+        let failed = 0;
+
+        if (processed > 0) {
+          port.postMessage({
+            type: "BIO_PROGRESS",
+            processed,
+            fetched,
+            failed,
+            cached: processed,
+            total: targetIds.length,
+          });
+        }
+
+        for (const id of pendingIds) {
+          try {
+            const profile = await fetchUserBio(cookies, id);
+            profiles[id] = profile;
+            // Cache every successful profile immediately so results persist
+            // even if popup closes or request flow is interrupted.
+            await setBioCacheOne(id, profile);
+            fetched++;
+          } catch (_) {
+            failed++;
+          }
+          processed++;
+          port.postMessage({
+            type: "BIO_PROGRESS",
+            processed,
+            fetched,
+            failed,
+            cached: Object.keys(cached).length,
+            total: targetIds.length,
+          });
+          await new Promise((r) => setTimeout(r, BIO_DELAY_MS));
+        }
+
+        port.postMessage({
+          type: "BIO_DONE",
+          profiles,
+          meta: {
+            total: targetIds.length,
+            fetched,
+            cached: Object.keys(cached).length,
+            failed,
+          },
+        });
+      } catch (e) {
+        try {
+          port.postMessage({ type: "ERROR", error: e.message });
+        } catch (_) { /* port disconnected */ }
+      }
+      return;
+    }
+
     if (msg.type !== "FETCH_FOLLOWING") return;
 
     const order = msg.order || "date_followed_latest";

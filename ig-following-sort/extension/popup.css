@@ -53,10 +53,15 @@ header h1 {
   align-items: center;
 }
 
-#search {
+.search-wrap {
+  position: relative;
   flex: 1;
+}
+
+#search {
+  width: 100%;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 30px 0 10px;
   border: 1px solid #dbdbdb;
   border-radius: 8px;
   font-size: 13px;
@@ -70,14 +75,60 @@ header h1 {
   background: #fff;
 }
 
+#search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: #d9d9d9;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+#search-clear:hover {
+  background: #bdbdbd;
+}
+
 #sort-order {
   height: 32px;
-  padding: 0 6px;
+  padding: 0 4px;
   border: 1px solid #dbdbdb;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11px;
   background: #fff;
   cursor: pointer;
+  max-width: 108px;
+}
+
+#fetch-bio-btn {
+  height: 32px;
+  min-width: 64px;
+  padding: 0 8px;
+  border: 1px solid #dbdbdb;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+#fetch-bio-btn:hover {
+  background: #efefef;
+}
+
+#fetch-bio-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 #refresh-btn {
@@ -102,6 +153,36 @@ header h1 {
   margin-top: 6px;
   font-size: 11px;
   color: #8e8e8e;
+}
+
+#bio-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+#bio-progress-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: #e7f6ea;
+  overflow: hidden;
+}
+
+#bio-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #31b84a 0%, #24a13e 100%);
+  transition: width 0.2s ease;
+}
+
+#bio-progress-text {
+  width: 42px;
+  text-align: right;
+  font-size: 11px;
+  color: #2a8f3f;
+  font-weight: 600;
 }
 
 /* ---- List ---- */
@@ -164,6 +245,15 @@ header h1 {
 .user-fullname {
   font-size: 12px;
   color: #8e8e8e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-bio {
+  margin-top: 1px;
+  font-size: 11px;
+  color: #6f6f6f;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
