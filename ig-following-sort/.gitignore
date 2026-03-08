@@ -1,2 +1,9 @@
-# Personal data
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/
+data/*.db
+data/*.csv
+
+# Personal Instagram export data – never commit
 IG_INFO/

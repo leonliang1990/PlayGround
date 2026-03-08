@@ -213,6 +213,7 @@ chrome.runtime.onConnect.addListener((port) => {
         }
 
         const pendingIds = targetIds.filter((id) => !cached[id]);
+        const cachedCount = Object.keys(cached).length;
         let processed = Object.keys(cached).length;
         let fetched = 0;
         let failed = 0;
@@ -223,15 +224,17 @@ chrome.runtime.onConnect.addListener((port) => {
             processed,
             fetched,
             failed,
-            cached: processed,
+            cached: cachedCount,
             total: targetIds.length,
           });
         }
 
         for (const id of pendingIds) {
+          let liveProfile = null;
           try {
             const profile = await fetchUserBio(cookies, id);
             profiles[id] = profile;
+            liveProfile = profile;
             // Cache every successful profile immediately so results persist
             // even if popup closes or request flow is interrupted.
             await setBioCacheOne(id, profile);
@@ -245,8 +248,9 @@ chrome.runtime.onConnect.addListener((port) => {
             processed,
             fetched,
             failed,
-            cached: Object.keys(cached).length,
+            cached: cachedCount,
             total: targetIds.length,
+            ...(liveProfile ? { itemId: id, profile: liveProfile } : {}),
           });
           await new Promise((r) => setTimeout(r, BIO_DELAY_MS));
         }
@@ -257,7 +261,7 @@ chrome.runtime.onConnect.addListener((port) => {
           meta: {
             total: targetIds.length,
             fetched,
-            cached: Object.keys(cached).length,
+            cached: cachedCount,
             failed,
           },
         });

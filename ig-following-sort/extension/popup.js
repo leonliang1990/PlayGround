@@ -32,6 +32,12 @@ let allUsers = [];
 let filteredUsers = [];
 let searchQuery = "";
 let bioLoadedCount = 0;
+let bioFilterRefreshTimer = null;
+const userById = new Map();
+const rowById = new Map();
+const pendingBioDomUpdateIds = new Set();
+let bioDomFlushRaf = 0;
+let visibleBioSyncRaf = 0;
 const BIO_LOCAL_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 
 const PLACEHOLDER_AVATAR =
@@ -152,6 +158,91 @@ function updateSearchClearButton() {
   $searchClear.classList.toggle("hidden", !$search.value.trim());
 }
 
+function composeBioText(user) {
+  return [user.category || "", user.city_name || "", user.biography || ""]
+    .map((s) => (s || "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function rebuildUserMap() {
+  userById.clear();
+  for (const user of allUsers) {
+    const id = String(user.pk || "");
+    if (!id) continue;
+    userById.set(id, user);
+  }
+}
+
+function applyBioToUser(user, profile) {
+  const hadBio = !!(user.biography || user.category || user.city_name);
+  user.biography = profile.biography || "";
+  user.category = profile.category || "";
+  user.city_name = profile.city_name || "";
+  const hasBio = !!(user.biography || user.category || user.city_name);
+  return !hadBio && hasBio;
+}
+
+function isElementVisibleInContainer(el, container) {
+  if (!el || !container) return false;
+  const r = el.getBoundingClientRect();
+  const c = container.getBoundingClientRect();
+  return r.bottom > c.top && r.top < c.bottom;
+}
+
+function updateUserBioInDOM(userId, visibleOnly = false) {
+  const row = rowById.get(String(userId));
+  const user = userById.get(String(userId));
+  if (!row || !user) return false;
+  if (visibleOnly && !isElementVisibleInContainer(row, $listContainer)) return false;
+
+  const bioText = composeBioText(user);
+  row.title = bioText ? bioText.replaceAll(" · ", " | ") : `@${user.username}`;
+
+  const bioLine = row.querySelector(".user-bio");
+  if (!bioLine) return false;
+
+  bioLine.textContent = bioText || "\u00A0";
+  bioLine.classList.toggle("loaded", !!bioText);
+  return true;
+}
+
+function flushPendingBioDomUpdates() {
+  bioDomFlushRaf = 0;
+  for (const id of pendingBioDomUpdateIds) {
+    updateUserBioInDOM(id, true);
+  }
+  pendingBioDomUpdateIds.clear();
+}
+
+function queueBioDomUpdate(userId) {
+  pendingBioDomUpdateIds.add(String(userId));
+  if (bioDomFlushRaf) return;
+  bioDomFlushRaf = requestAnimationFrame(flushPendingBioDomUpdates);
+}
+
+function syncVisibleBioRows() {
+  visibleBioSyncRaf = 0;
+  for (const [id, row] of rowById.entries()) {
+    if (!isElementVisibleInContainer(row, $listContainer)) continue;
+    updateUserBioInDOM(id, false);
+  }
+}
+
+function scheduleVisibleBioSync() {
+  if (visibleBioSyncRaf) return;
+  visibleBioSyncRaf = requestAnimationFrame(syncVisibleBioRows);
+}
+
+function scheduleFilterRefresh() {
+  if (!searchQuery.trim()) return;
+  if (bioFilterRefreshTimer) return;
+  bioFilterRefreshTimer = setTimeout(() => {
+    bioFilterRefreshTimer = null;
+    applyFilter();
+  }, 220);
+}
+
 async function hydrateBiosFromLocalCache(limit = null) {
   const targets = allUsers
     .map((u) => String(u.pk || ""))
@@ -201,6 +292,7 @@ function loadFollowing(forceRefresh) {
     if (msg.type === "DONE") {
       $loading.classList.add("hidden");
       allUsers = msg.users || [];
+      rebuildUserMap();
       bioLoadedCount = await hydrateBiosFromLocalCache();
       $totalCount.textContent = `${allUsers.length} following`;
       $cacheHint.textContent = `${msg.fromCache ? "(cached)" : "(fresh)"} · bio ${bioLoadedCount}/${allUsers.length}`;
@@ -254,6 +346,7 @@ function updateFilterStatus() {
 // ---------------------------------------------------------------------------
 function renderList() {
   $userList.innerHTML = "";
+  rowById.clear();
 
   if (filteredUsers.length === 0 && allUsers.length > 0) {
     $emptyMsg.classList.remove("hidden");
@@ -265,14 +358,14 @@ function renderList() {
 
   for (let i = 0; i < filteredUsers.length; i++) {
     const user = filteredUsers[i];
+    const userId = String(user.pk || "");
     const globalIndex = allUsers.indexOf(user);
 
     const li = document.createElement("li");
     li.className = "user-item";
-    const tooltipParts = [user.category || "", user.city_name || "", user.biography || ""]
-      .map((s) => (s || "").trim())
-      .filter(Boolean);
-    li.title = tooltipParts.length ? tooltipParts.join(" | ") : `@${user.username}`;
+    if (userId) li.dataset.userId = userId;
+    const bioText = composeBioText(user);
+    li.title = bioText ? bioText.replaceAll(" · ", " | ") : `@${user.username}`;
     li.addEventListener("click", () => {
       chrome.tabs.create({ url: `https://www.instagram.com/${user.username}/` });
     });
@@ -321,22 +414,22 @@ function renderList() {
 
     const bioLine = document.createElement("div");
     bioLine.className = "user-bio";
-    const bioParts = [user.category || "", user.city_name || "", user.biography || ""]
-      .map((s) => (s || "").trim())
-      .filter(Boolean);
-    bioLine.textContent = bioParts.join(" · ");
+    bioLine.textContent = bioText || "\u00A0";
+    bioLine.classList.toggle("loaded", !!bioText);
 
     info.appendChild(nameLine);
     info.appendChild(fullName);
-    if (bioLine.textContent) info.appendChild(bioLine);
+    info.appendChild(bioLine);
 
     li.appendChild(indexSpan);
     li.appendChild(avatar);
     li.appendChild(info);
     fragment.appendChild(li);
+    if (userId) rowById.set(userId, li);
   }
 
   $userList.appendChild(fragment);
+  scheduleVisibleBioSync();
 }
 
 function fetchBios() {
@@ -354,6 +447,15 @@ function fetchBios() {
   const port = chrome.runtime.connect({ name: "bios" });
   port.onMessage.addListener((msg) => {
     if (msg.type === "BIO_PROGRESS") {
+      if (msg.itemId && msg.profile) {
+        const user = userById.get(String(msg.itemId));
+        if (user) {
+          const becameLoaded = applyBioToUser(user, msg.profile);
+          if (becameLoaded) bioLoadedCount++;
+          queueBioDomUpdate(msg.itemId);
+          scheduleFilterRefresh();
+        }
+      }
       $cacheHint.textContent = `bio: ${msg.processed}/${msg.total} (new ${msg.fetched}, cache ${msg.cached}, fail ${msg.failed})`;
       const percent = msg.total > 0 ? (msg.processed / msg.total) * 100 : 0;
       showBioProgress(percent);
@@ -362,13 +464,16 @@ function fetchBios() {
 
     if (msg.type === "BIO_DONE") {
       const profiles = msg.profiles || {};
+      for (const [key, profile] of Object.entries(profiles)) {
+        const user = userById.get(String(key));
+        if (!user) continue;
+        applyBioToUser(user, profile || {});
+      }
       for (const user of allUsers) {
         const key = String(user.pk || "");
         const p = profiles[key];
         if (!p) continue;
-        user.biography = p.biography || "";
-        user.category = p.category || "";
-        user.city_name = p.city_name || "";
+        queueBioDomUpdate(key);
       }
 
       bioLoadedCount = allUsers.filter((u) => u.biography || u.category || u.city_name).length;
@@ -439,6 +544,7 @@ $retryBtn.addEventListener("click", () => {
 if ($scrollTop) {
   $listContainer.addEventListener("scroll", () => {
     $scrollTop.classList.toggle("hidden", $listContainer.scrollTop < 300);
+    scheduleVisibleBioSync();
   });
   $scrollTop.addEventListener("click", () => {
     $listContainer.scrollTo({ top: 0, behavior: "smooth" });
