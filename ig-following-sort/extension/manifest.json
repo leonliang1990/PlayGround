@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "IG Following Sort",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "View your Instagram following list sorted by follow date, just like the mobile app.",
   "permissions": [
     "cookies",
     "storage"
   ],
   "host_permissions": [
-    "*://*.instagram.com/*"
+    "*://*.instagram.com/*",
+    "*://*.cdninstagram.com/*",
+    "*://*.fbcdn.net/*"
   ],
   "background": {
     "service_worker": "background.js"

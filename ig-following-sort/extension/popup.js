@@ -58,14 +58,7 @@ async function loadAvatar(img, url) {
     return;
   }
 
-  // 2. Try direct load first (fast path, may work for some CDN configs)
-  const directOk = await tryDirectLoad(img, url);
-  if (directOk) {
-    avatarCache.set(url, url);
-    return;
-  }
-
-  // 3. Proxy through background service worker
+  // 2. Proxy through background service worker (preferred path)
   try {
     const res = await chrome.runtime.sendMessage({ type: "PROXY_IMAGE", url });
     if (res?.ok && res.dataUrl) {
@@ -75,21 +68,14 @@ async function loadAvatar(img, url) {
     }
   } catch (_) { /* fall through */ }
 
-  img.src = PLACEHOLDER_AVATAR;
-}
-
-function tryDirectLoad(img, url) {
-  return new Promise((resolve) => {
-    const tester = new Image();
-    tester.referrerPolicy = "no-referrer";
-    tester.crossOrigin = "anonymous";
-    tester.onload = () => {
-      img.src = url;
-      resolve(true);
-    };
-    tester.onerror = () => resolve(false);
-    tester.src = url;
-  });
+  // 3. Fallback to direct URL load.
+  // Some CDN regions may still allow direct image rendering in extension context.
+  img.onerror = () => {
+    img.onerror = null;
+    img.src = PLACEHOLDER_AVATAR;
+  };
+  img.referrerPolicy = "no-referrer";
+  img.src = url;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +214,10 @@ function renderList() {
     avatar.className = "user-avatar";
     avatar.src = PLACEHOLDER_AVATAR;
     avatar.referrerPolicy = "no-referrer";
+    avatar.onerror = () => {
+      avatar.onerror = null;
+      avatar.src = PLACEHOLDER_AVATAR;
+    };
     if (user.profile_pic_url) {
       avatar.dataset.src = user.profile_pic_url;
       avatarObserver.observe(avatar);
