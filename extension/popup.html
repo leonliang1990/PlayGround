@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IG Following Sort</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Login gate -->
+  <div id="login-gate" class="hidden">
+    <div class="empty-state">
+      <p>Please log in to <a href="https://www.instagram.com" target="_blank">instagram.com</a> first, then reopen this popup.</p>
+    </div>
+  </div>
+
+  <!-- Main UI -->
+  <div id="main-ui" class="hidden">
+    <header>
+      <h1>IG Following</h1>
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="Search username / name..." autocomplete="off">
+        <select id="sort-order">
+          <option value="date_followed_latest">Newest first</option>
+          <option value="date_followed_earliest">Oldest first</option>
+        </select>
+        <button id="refresh-btn" title="Refresh">&#x21bb;</button>
+      </div>
+      <div id="status-bar">
+        <span id="total-count"></span>
+        <span id="cache-hint"></span>
+      </div>
+    </header>
+
+    <div id="list-container">
+      <div id="loading" class="hidden">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading following list...</p>
+      </div>
+      <ul id="user-list"></ul>
+      <div id="empty-msg" class="hidden empty-state">
+        <p>No results match your search.</p>
+      </div>
+    </div>
+
+    <button id="scroll-top-btn" class="hidden" title="Back to top">&uarr;</button>
+  </div>
+
+  <!-- Error state -->
+  <div id="error-state" class="hidden">
+    <div class="empty-state error">
+      <p id="error-msg"></p>
+      <button id="retry-btn">Retry</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

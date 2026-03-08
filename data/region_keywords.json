@@ -1,0 +1,15 @@
+{
+  "korea": ["korea", "korean", "seoul", "busan", "kr", "대한민국", "한국", "서울", "부산"],
+  "japan": ["japan", "japanese", "tokyo", "osaka", "jp", "日本", "東京", "大阪"],
+  "china": ["china", "chinese", "beijing", "shanghai", "cn", "中国", "北京", "上海"],
+  "taiwan": ["taiwan", "taipei", "tw", "台灣", "台湾", "台北"],
+  "hong_kong": ["hong kong", "hk", "香港"],
+  "singapore": ["singapore", "sg"],
+  "usa": ["usa", "united states", "us", "new york", "los angeles", "california", "nyc", "sf"],
+  "uk": ["uk", "united kingdom", "london", "england"],
+  "germany": ["germany", "berlin", "deutschland", "de"],
+  "france": ["france", "paris", "fr"],
+  "italy": ["italy", "italian", "milan", "milano", "rome", "roma", "torino", "turin"],
+  "spain": ["spain", "spanish", "madrid", "barcelona", "valencia"],
+  "netherlands": ["netherlands", "dutch", "amsterdam", "rotterdam", "utrecht"]
+}
